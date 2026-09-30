@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-30-todo-planner-design.md`
 
+> **구현 중 바뀐 점 (2026-09-30, 코드 기준으로 이 계획서를 맞춤):** (1) RLS 마이그레이션에 `revoke/grant` 추가(공식 문서). (2) 행↔Item 변환을 `src/data/mapping.ts`로 분리(환경변수 없이 단위 테스트). (3) `dueLabel()` 추가와 디자인 B(모던 카드) 스타일·마크업, 하단 탭에 로그아웃 버튼. (4) 로그인 확인은 `onAuthStateChange`만 사용(첫 이벤트 `INITIAL_SESSION`). (5) `tests/rls.test.ts`는 Supabase 환경변수가 없으면 건너뜀. 스택 검증은 `stack-verification.md` 참고.
+
 ## Global Constraints
 
 - 할일과 일정은 하나의 항목(item). 시각이 있으면 일정으로도 표시.
@@ -45,7 +47,8 @@ src/domain/rules.ts                      긴급도·사분면·오늘 목록·�
 src/domain/calendar.ts                   주·월 격자, 날짜별 항목 배치 (순수)
 src/domain/*.test.ts
 src/data/supabase.ts                     클라이언트 생성
-src/data/items.ts                        항목 CRUD, 행↔Item 변환
+src/data/mapping.ts                      행↔Item 변환 (순수)
+src/data/items.ts                        항목 CRUD
 src/state/useItems.ts                    항목 상태, 오류, 재시도
 src/ui/App.tsx                           로그인 게이트, 탭, 모달 상태
 src/ui/Login.tsx, ErrorBanner.tsx, ItemModal.tsx
@@ -143,6 +146,7 @@ git commit -m "chore: scaffold vite react ts project"
   - `type Quadrant = 1 | 2 | 3 | 4`, `quadrant(item, today): Quadrant`
   - `todayList(items, today): Item[]`
   - `validateItem(input: { title: string; startAt: string | null; endAt: string | null }): string | null` (오류 메시지 또는 null)
+  - `dueLabel(due: string, today: string): string` (`N일 지남` / `오늘` / `내일` / `MM-DD`, 오늘 화면 라벨용)
 
 - [ ] **Step 1: 타입과 날짜 실패 테스트 작성**
 
@@ -222,7 +226,7 @@ Run: `npm test -- dates` → PASS
 ```ts
 import { test, expect } from 'vitest'
 import type { Item } from './types'
-import { effectiveDue, isOverdue, isUrgent, quadrant, todayList, validateItem } from './rules'
+import { dueLabel, effectiveDue, isOverdue, isUrgent, quadrant, todayList, validateItem } from './rules'
 
 const T = '2026-09-30'
 const mk = (o: Partial<Item> = {}): Item => ({
@@ -284,6 +288,15 @@ test('validateItem', () => {
   expect(validateItem({ title: 'a', startAt: s, endAt: '2026-09-30T09:00:00.000Z' })).toMatch(/종료/)
   expect(validateItem({ title: 'a', startAt: s, endAt: s })).toBeNull()
   expect(validateItem({ title: 'a', startAt: null, endAt: s })).toMatch(/시작/)
+})
+
+test('dueLabel', () => {
+  expect(dueLabel('2026-09-28', T)).toBe('2일 지남')
+  expect(dueLabel('2026-09-29', T)).toBe('1일 지남')
+  expect(dueLabel(T, T)).toBe('오늘')
+  expect(dueLabel('2026-10-01', T)).toBe('내일')
+  expect(dueLabel('2026-10-08', T)).toBe('10-08')
+  expect(dueLabel('2026-12-31', '2026-12-30')).toBe('내일')
 })
 ```
 
@@ -352,6 +365,19 @@ export function validateItem(v: {
     return '종료 시각은 시작 시각 이후여야 합니다.'
   }
   return null
+}
+
+function dayNumber(key: string): number {
+  const [y, m, d] = key.split('-').map(Number)
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000)
+}
+
+export function dueLabel(due: string, today: string): string {
+  const diff = dayNumber(due) - dayNumber(today)
+  if (diff < 0) return `${-diff}일 지남`
+  if (diff === 0) return '오늘'
+  if (diff === 1) return '내일'
+  return due.slice(5)
 }
 ```
 
@@ -518,6 +544,9 @@ create index items_owner_due_idx on public.items (owner, due_date);
 
 alter table public.items enable row level security;
 
+revoke all on table public.items from anon, authenticated;
+grant select, insert, update, delete on table public.items to authenticated;
+
 create policy "owner full access" on public.items
   for all to authenticated
   using (owner = (select auth.uid()))
@@ -530,7 +559,7 @@ create policy "owner full access" on public.items
 
 `tests/rls.test.ts`:
 ```ts
-import { test, expect, beforeAll } from 'vitest'
+import { test, expect, beforeAll, describe } from 'vitest'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { loadEnv } from 'vite'
 
@@ -550,50 +579,53 @@ async function signedIn(tag: string): Promise<SupabaseClient> {
   return c
 }
 
-let a: SupabaseClient
-let b: SupabaseClient
-let aItemId: string
+// Skipped (not passed) when no Supabase project is configured in .env
+describe.skipIf(!url || !key)('items row level security', () => {
+  let a: SupabaseClient
+  let b: SupabaseClient
+  let aItemId: string
 
-beforeAll(async () => {
-  a = await signedIn('a')
-  b = await signedIn('b')
-  const { data, error } = await a.from('items').insert({ title: 'A only' }).select().single()
-  if (error) throw error
-  aItemId = data.id
-}, 30000)
+  beforeAll(async () => {
+    a = await signedIn('a')
+    b = await signedIn('b')
+    const { data, error } = await a.from('items').insert({ title: 'A only' }).select().single()
+    if (error) throw error
+    aItemId = data.id
+  }, 30000)
 
-test('B cannot read A items', async () => {
-  const { data, error } = await b.from('items').select().eq('id', aItemId)
-  expect(error).toBeNull()
-  expect(data).toEqual([])
-})
-
-test('B cannot modify or delete A items', async () => {
-  await b.from('items').update({ title: 'hacked' }).eq('id', aItemId)
-  await b.from('items').delete().eq('id', aItemId)
-  const { data } = await a.from('items').select().eq('id', aItemId).single()
-  expect(data?.title).toBe('A only')
-})
-
-test('B cannot insert an item owned by A', async () => {
-  const { data: u } = await a.auth.getUser()
-  const { error } = await b.from('items').insert({ title: 'spoof', owner: u.user!.id })
-  expect(error).not.toBeNull()
-})
-
-test('anonymous client sees nothing', async () => {
-  const anon = createClient(url, key, { auth: { persistSession: false } })
-  const { data } = await anon.from('items').select()
-  expect(data ?? []).toEqual([])
-})
-
-test('DB rejects blank title and end before start', async () => {
-  const blank = await a.from('items').insert({ title: '   ' })
-  expect(blank.error).not.toBeNull()
-  const bad = await a.from('items').insert({
-    title: 'x', start_at: '2026-09-30T10:00:00Z', end_at: '2026-09-30T09:00:00Z',
+  test('B cannot read A items', async () => {
+    const { data, error } = await b.from('items').select().eq('id', aItemId)
+    expect(error).toBeNull()
+    expect(data).toEqual([])
   })
-  expect(bad.error).not.toBeNull()
+
+  test('B cannot modify or delete A items', async () => {
+    await b.from('items').update({ title: 'hacked' }).eq('id', aItemId)
+    await b.from('items').delete().eq('id', aItemId)
+    const { data } = await a.from('items').select().eq('id', aItemId).single()
+    expect(data?.title).toBe('A only')
+  })
+
+  test('B cannot insert an item owned by A', async () => {
+    const { data: u } = await a.auth.getUser()
+    const { error } = await b.from('items').insert({ title: 'spoof', owner: u.user!.id })
+    expect(error).not.toBeNull()
+  })
+
+  test('anonymous client sees nothing', async () => {
+    const anon = createClient(url, key, { auth: { persistSession: false } })
+    const { data } = await anon.from('items').select()
+    expect(data ?? []).toEqual([])
+  })
+
+  test('DB rejects blank title and end before start', async () => {
+    const blank = await a.from('items').insert({ title: '   ' })
+    expect(blank.error).not.toBeNull()
+    const bad = await a.from('items').insert({
+      title: 'x', start_at: '2026-09-30T10:00:00Z', end_at: '2026-09-30T09:00:00Z',
+    })
+    expect(bad.error).not.toBeNull()
+  })
 })
 ```
 
@@ -613,24 +645,24 @@ git commit -m "feat: items table with owner-only RLS and access tests"
 ### Task 6: 데이터 계층, 인증, 상태
 
 **Files:**
-- Create: `src/data/supabase.ts`, `src/data/items.ts`, `src/state/useItems.ts`, `src/ui/Login.tsx`, `src/ui/ErrorBanner.tsx`
-- Test: `src/data/items.test.ts`
+- Create: `src/data/supabase.ts`, `src/data/mapping.ts`, `src/data/items.ts`, `src/state/useItems.ts`, `src/ui/Login.tsx`, `src/ui/ErrorBanner.tsx`
+- Test: `src/data/mapping.test.ts`
 
 **Interfaces:**
 - Consumes: `Item`, `ItemInput`, `validateItem`
 - Produces:
-  - `supabase: SupabaseClient`
-  - `rowToItem(row): Item`, `inputToRow(input: ItemInput): Record<string, unknown>`
+  - `supabase: SupabaseClient` (환경변수가 없어도 import 시 던지지 않도록 자리표시 URL·키로 대체)
+  - `mapping.ts`: `type Row`, `rowToItem(row: Row): Item`, `inputToRow(input: Partial<ItemInput>): Record<string, unknown>` (`items.ts`가 Supabase 클라이언트를 만들기 때문에, 환경변수 없이 단위 테스트하려고 순수 함수를 분리)
   - `listItems(): Promise<Item[]>`, `createItem(input: ItemInput): Promise<Item>`, `updateItem(id: string, patch: Partial<ItemInput>): Promise<Item>`, `deleteItem(id: string): Promise<void>` (실패 시 throw)
   - `useItems(): { items: Item[]; error: string | null; loading: boolean; reload(): Promise<void>; save(id: string | null, input: ItemInput): Promise<boolean>; toggleDone(item: Item): Promise<void>; remove(id: string): Promise<void>; clearError(): void }`
   - `<Login />`, `<ErrorBanner message onRetry />`
 
 - [ ] **Step 1: 변환 함수 실패 테스트**
 
-`src/data/items.test.ts`:
+`src/data/mapping.test.ts`:
 ```ts
 import { test, expect } from 'vitest'
-import { rowToItem, inputToRow } from './items'
+import { rowToItem, inputToRow } from './mapping'
 
 test('rowToItem maps snake_case to Item', () => {
   expect(rowToItem({
@@ -649,9 +681,13 @@ test('inputToRow trims title and omits owner', () => {
   expect(row.title).toBe('a')
   expect('owner' in row).toBe(false)
 })
+
+test('inputToRow on a partial patch only includes given fields', () => {
+  expect(inputToRow({ done: true })).toEqual({ done: true })
+})
 ```
 
-Run: `npm test -- items` → FAIL
+Run: `npm test -- mapping` → FAIL (`./mapping` 없음)
 
 - [ ] **Step 2: 구현**
 
@@ -660,19 +696,23 @@ Run: `npm test -- items` → FAIL
 import { createClient } from '@supabase/supabase-js'
 
 export const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  import.meta.env.VITE_SUPABASE_URL ?? 'http://localhost:54321',
+  import.meta.env.VITE_SUPABASE_ANON_KEY ?? 'missing-anon-key',
 )
 ```
 
-`src/data/items.ts`:
+`src/data/mapping.ts`:
 ```ts
 import type { Item, ItemInput } from '../domain/types'
-import { supabase } from './supabase'
 
-type Row = {
-  id: string; title: string; important: boolean; due_date: string | null
-  start_at: string | null; end_at: string | null; done: boolean
+export type Row = {
+  id: string
+  title: string
+  important: boolean
+  due_date: string | null
+  start_at: string | null
+  end_at: string | null
+  done: boolean
 }
 
 export function rowToItem(r: Row): Item {
@@ -692,6 +732,15 @@ export function inputToRow(i: Partial<ItemInput>): Record<string, unknown> {
   if (i.done !== undefined) row.done = i.done
   return row
 }
+```
+
+Run: `npm test -- mapping` → PASS
+
+`src/data/items.ts`:
+```ts
+import type { Item, ItemInput } from '../domain/types'
+import { supabase } from './supabase'
+import { inputToRow, rowToItem, type Row } from './mapping'
 
 export async function listItems(): Promise<Item[]> {
   const { data, error } = await supabase.from('items').select().order('created_at')
@@ -716,8 +765,6 @@ export async function deleteItem(id: string): Promise<void> {
   if (error) throw error
 }
 ```
-
-Run: `npm test -- items` → PASS
 
 - [ ] **Step 3: 상태 훅**
 
@@ -926,9 +973,17 @@ export function ItemModal(props: {
 `src/ui/TodayView.tsx`:
 ```tsx
 import type { Item } from '../domain/types'
-import { isOverdue, todayList } from '../domain/rules'
+import { dueLabel, effectiveDue, isOverdue, quadrant, todayList } from '../domain/rules'
 import { itemsOnDay } from '../domain/calendar'
 import { toLocalInput } from '../domain/dates'
+
+const CIRCLED = ['', '①', '②', '③', '④']
+const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토']
+
+function heading(today: string): string {
+  const [y, m, d] = today.split('-').map(Number)
+  return `${m}월 ${d}일 ${WEEKDAY[new Date(y, m - 1, d).getDay()]}요일`
+}
 
 export function TodayView(props: {
   items: Item[]
@@ -940,28 +995,36 @@ export function TodayView(props: {
   const todos = todayList(props.items, props.today).filter((i) => !i.startAt || isOverdue(i, props.today))
   return (
     <div>
-      <h2>오늘 일정</h2>
+      <div className="top">{heading(props.today)}</div>
+      <h2 className="page-title">오늘</h2>
+      <div className="sec">일정</div>
       {events.length === 0 && <p className="muted">오늘 일정이 없습니다.</p>}
-      <ul>
-        {events.map((e) => (
-          <li key={e.id} className={e.done ? 'done' : ''} onClick={() => props.onOpen(e)}>
-            <input type="checkbox" checked={e.done} onClick={(ev) => ev.stopPropagation()} onChange={() => props.onToggle(e)} />
-            <span className="time">{toLocalInput(e.startAt).slice(11)}</span> {e.title}
-            {e.important && ' ★'}
-          </li>
-        ))}
-      </ul>
-      <h2>오늘 할 일</h2>
+      {events.length > 0 && (
+        <div className="tl">
+          {events.map((e) => (
+            <div key={e.id} className={`ev${e.done ? ' done' : ''}`} onClick={() => props.onOpen(e)}>
+              <input type="checkbox" checked={e.done} onClick={(ev) => ev.stopPropagation()} onChange={() => props.onToggle(e)} />
+              <span className="t">{toLocalInput(e.startAt).slice(11)}</span>
+              <span>{e.title}{e.important && <span className="star"> ★</span>}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="sec">할 일 · {todos.length}</div>
       {todos.length === 0 && <p className="muted">오늘 할 일이 없습니다.</p>}
-      <ul>
-        {todos.map((t) => (
-          <li key={t.id} className={isOverdue(t, props.today) ? 'overdue' : ''} onClick={() => props.onOpen(t)}>
+      {todos.map((t) => {
+        const overdue = isOverdue(t, props.today)
+        return (
+          <div key={t.id} className={`todo${overdue ? ' overdue' : ''}`} onClick={() => props.onOpen(t)}>
             <input type="checkbox" checked={t.done} onClick={(ev) => ev.stopPropagation()} onChange={() => props.onToggle(t)} />
-            {t.title}{t.important && ' ★'}
-            <span className="muted"> {t.dueDate}</span>
-          </li>
-        ))}
-      </ul>
+            <span>{t.title}{t.important && <span className="star"> ★</span>}</span>
+            <span className="meta">
+              {!overdue && <span className="badge">{CIRCLED[quadrant(t, props.today)]} </span>}
+              {dueLabel(effectiveDue(t)!, props.today)}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -993,7 +1056,6 @@ const blank: Draft = { id: null, title: '', important: false, dueDate: null, sta
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => data.subscription.unsubscribe()
   }, [])
@@ -1021,11 +1083,11 @@ function Main() {
         {tab === 'matrix' && <MatrixView items={items} today={today} onOpen={openEdit} />}
       </main>
       <nav>
-        <button onClick={() => setTab('today')}>오늘</button>
-        <button onClick={() => setTab('calendar')}>캘린더</button>
-        <button onClick={() => setTab('matrix')}>매트릭스</button>
-        <button className="add" onClick={() => openNew({ dueDate: tab === 'today' ? today : null })}>＋</button>
-        <button onClick={() => void supabase.auth.signOut()}>로그아웃</button>
+        <button className={tab === 'today' ? 'on' : ''} onClick={() => setTab('today')}><i>◎</i>오늘</button>
+        <button className={tab === 'calendar' ? 'on' : ''} onClick={() => setTab('calendar')}><i>▦</i>캘린더</button>
+        <button className="add" aria-label="항목 추가" onClick={() => openNew({ dueDate: tab === 'today' ? today : null })}>＋</button>
+        <button className={tab === 'matrix' ? 'on' : ''} onClick={() => setTab('matrix')}><i>▤</i>매트릭스</button>
+        <button onClick={() => void supabase.auth.signOut()}><i>⎋</i>로그아웃</button>
       </nav>
       {draft && (
         <ItemModal
@@ -1046,34 +1108,87 @@ function Main() {
 
 `src/main.tsx`에서 `App`을 `./ui/App`에서 import 하도록 수정. `src/ui/styles.css`:
 ```css
-body { margin: 0; font-family: system-ui, sans-serif; }
-.app { max-width: 900px; margin: 0 auto; padding: 12px 12px 72px; }
-nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-around; background: #fff; border-top: 1px solid #ddd; padding: 8px; }
-nav .add { font-size: 1.4rem; }
-ul { list-style: none; padding: 0; }
-li { padding: 8px 0; border-bottom: 1px solid #eee; cursor: pointer; }
-li.done { opacity: .5; text-decoration: line-through; }
-li.overdue { color: #b00020; font-weight: 600; }
-.muted { color: #888; }
-.error { background: #fde8e8; padding: 8px; margin-bottom: 8px; }
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; }
-.modal { background: #fff; padding: 16px; display: grid; gap: 8px; width: min(420px, 92vw); }
+/* 디자인 B: 모던 카드 (docs/design/references/index.html 참고) */
+:root {
+  --bg: #f4f6fb; --surface: #fff; --text: #161a29; --muted: #7a8199; --line: #e4e8f2;
+  --accent: #4f46e5; --accent-soft: #eceafd; --danger: #e11d48; --danger-soft: #ffe8ee;
+  --star: #f59e0b; --radius: 14px; --block: #dcd9fb; --block-imp: #fde9c2;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, "Malgun Gothic", sans-serif; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.app { max-width: 900px; margin: 0 auto; padding: 18px 16px 96px; }
+
+.top { font-size: 12px; color: var(--muted); }
+.page-title { font-size: 26px; margin: 2px 0 14px; letter-spacing: -.02em; }
+.sec { font-size: 12px; font-weight: 600; color: var(--muted); margin: 16px 0 6px; letter-spacing: .04em; }
+.muted { color: var(--muted); font-size: 14px; }
+.star { color: var(--star); }
+
+.tl { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 12px; }
+.ev { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; cursor: pointer; }
+.ev:last-child { border: 0; }
+.ev .t { width: 44px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ev.done, .todo.done { opacity: .45; text-decoration: line-through; }
+
+.todo { display: flex; gap: 10px; align-items: center; padding: 11px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 6px; font-size: 14px; cursor: pointer; }
+.todo .meta { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.badge { font-size: 11px; padding: 2px 6px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.todo.overdue { background: var(--danger-soft); border-color: transparent; }
+.todo.overdue .meta { color: var(--danger); font-weight: 600; }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+
+nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-around; align-items: center; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 6px 12px; }
+nav button { background: none; border: 0; color: var(--muted); font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+nav button i { font-style: normal; font-size: 17px; }
+nav button.on { color: var(--accent); font-weight: 700; }
+nav .add { width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 26px; margin-top: -22px; box-shadow: 0 4px 12px rgba(0,0,0,.25); justify-content: center; }
+
+.error { background: var(--danger-soft); color: var(--danger); padding: 10px 12px; border-radius: var(--radius); margin-bottom: 10px; display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.error button { margin-left: auto; border: 1px solid var(--danger); background: none; color: var(--danger); border-radius: 8px; padding: 4px 10px; }
+
+.modal-backdrop { position: fixed; inset: 0; background: rgba(22,26,41,.45); display: flex; align-items: center; justify-content: center; z-index: 10; }
+.modal { background: var(--surface); padding: 18px; border-radius: 18px; display: grid; gap: 10px; width: min(420px, 92vw); max-height: 90vh; overflow: auto; }
+.modal label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.modal input[type="date"], .modal input[type="datetime-local"] { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.title-input { font-size: 18px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
 .row { display: flex; gap: 8px; }
-.login { display: grid; gap: 8px; max-width: 320px; margin: 20vh auto; }
-.matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.matrix section { border: 1px solid #ddd; padding: 8px; min-height: 120px; }
-.cal-head { display: flex; gap: 8px; align-items: center; }
-.month { display: grid; grid-template-columns: repeat(7, 1fr); }
-.cell { border: 1px solid #eee; min-height: 72px; padding: 2px; font-size: .8rem; cursor: pointer; }
-.cell.today { background: #eef4ff; }
-.cell.other { color: #bbb; }
+.row button, .login button { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.row .primary, .login button[type="submit"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.row .danger { margin-left: auto; color: var(--danger); }
+.row button:disabled { opacity: .6; }
+
+.login { display: grid; gap: 10px; max-width: 320px; margin: 18vh auto; padding: 0 16px; }
+.login input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+
+/* 매트릭스 */
+.matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; min-height: 180px; }
+.q h3 { font-size: 13px; margin: 0 0 8px; }
+.q h3 small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 1px; }
+.q.q1 h3 { color: var(--danger); } .q.q2 h3 { color: var(--accent); }
+.q .it { font-size: 13px; padding: 6px 8px; border-radius: 8px; background: var(--bg); margin-bottom: 5px; cursor: pointer; }
+
+/* 캘린더 */
+.cal-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.cal-head b { font-size: 18px; margin-right: auto; }
+.cal-head button { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 4px 12px; font-size: 13px; }
 .week { display: grid; grid-template-columns: repeat(7, 1fr); }
-.daycol { position: relative; height: 960px; border-left: 1px solid #eee; }
-.block { position: absolute; left: 2px; right: 2px; background: #cfe0ff; border-radius: 4px; font-size: .75rem; overflow: hidden; }
-.block.important { background: #ffd6a5; }
+.month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cell { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; min-height: 72px; padding: 3px; font-size: 12px; cursor: pointer; }
+.week .cell { border-radius: 0; min-height: 48px; }
+.cell.today { background: var(--accent-soft); }
+.cell.other { color: #b5bacb; }
+.daycol { position: relative; height: 960px; border-left: 1px solid var(--line); background-image: linear-gradient(var(--line) 1px, transparent 1px); background-size: 100% 40px; }
+.block { position: absolute; left: 2px; right: 2px; background: var(--block); border-left: 3px solid var(--accent); border-radius: 4px; font-size: 11px; padding: 2px 3px; overflow: hidden; }
+.block.important { background: var(--block-imp); border-left-color: var(--star); }
 .block.done { opacity: .4; }
-.marker { font-size: .7rem; }
+.marker { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .marker.done { opacity: .4; text-decoration: line-through; }
+.modal ul { list-style: none; padding: 0; margin: 0; }
+.modal li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.modal li.done { opacity: .45; text-decoration: line-through; }
 ```
 
 - [ ] **Step 5: 빌드로 타입 확인 (Task 8, 9 뷰가 없으므로 임시 스텁)**
@@ -1115,14 +1230,17 @@ import { addDays, toDateKey, fromLocalInput } from '../domain/dates'
 import { itemsOnDay, monthGrid, weekDays } from '../domain/calendar'
 
 const HOUR_PX = 40
+const p2 = (n: number) => String(n).padStart(2, '0')
 
-export function CalendarView(props: {
+type Handlers = {
   items: Item[]
   today: string
   onOpen: (i: Item) => void
   onNew: (p: Partial<Draft>) => void
   onToggle: (i: Item) => void
-}) {
+}
+
+export function CalendarView(props: Handlers) {
   const [mode, setMode] = useState<'week' | 'month'>('week')
   const [anchor, setAnchor] = useState(props.today)
   const [dayList, setDayList] = useState<string | null>(null)
@@ -1136,10 +1254,10 @@ export function CalendarView(props: {
   return (
     <div>
       <div className="cal-head">
+        <b>{anchor.slice(0, 4)}년 {Number(anchor.slice(5, 7))}월</b>
         <button onClick={() => shift(-1)}>◀</button>
-        <strong>{anchor.slice(0, 7)}</strong>
-        <button onClick={() => shift(1)}>▶</button>
         <button onClick={() => setAnchor(props.today)}>오늘</button>
+        <button onClick={() => shift(1)}>▶</button>
         <button onClick={() => setMode(mode === 'week' ? 'month' : 'week')}>{mode === 'week' ? '월간' : '주간'}</button>
       </div>
       {mode === 'week' ? <Week {...props} anchor={anchor} /> : <Month {...props} anchor={anchor} onDay={setDayList} />}
@@ -1148,7 +1266,7 @@ export function CalendarView(props: {
   )
 }
 
-function Week(p: { items: Item[]; today: string; anchor: string; onOpen: (i: Item) => void; onNew: (d: Partial<Draft>) => void }) {
+function Week(p: Handlers & { anchor: string }) {
   return (
     <div className="week">
       {weekDays(p.anchor).map((day) => {
@@ -1156,7 +1274,7 @@ function Week(p: { items: Item[]; today: string; anchor: string; onOpen: (i: Ite
         return (
           <div key={day}>
             <div className={day === p.today ? 'cell today' : 'cell'}>
-              {day.slice(8)}
+              {Number(day.slice(8))}
               {todos.map((t) => (
                 <div key={t.id} className={`marker${t.done ? ' done' : ''}`} onClick={() => p.onOpen(t)}>{t.important ? '★' : '•'} {t.title}</div>
               ))}
@@ -1166,17 +1284,18 @@ function Week(p: { items: Item[]; today: string; anchor: string; onOpen: (i: Ite
               onClick={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect()
                 const hour = Math.max(0, Math.min(23, Math.floor((e.clientY - rect.top) / HOUR_PX)))
-                const start = fromLocalInput(`${day}T${String(hour).padStart(2, '0')}:00`)
-                const end = fromLocalInput(`${day}T${String(Math.min(hour + 1, 23)).padStart(2, '0')}:${hour === 23 ? '59' : '00'}`)
-                p.onNew({ dueDate: day, startAt: start, endAt: end })
+                const endLocal = hour === 23 ? `${day}T23:59` : `${day}T${p2(hour + 1)}:00`
+                p.onNew({ dueDate: day, startAt: fromLocalInput(`${day}T${p2(hour)}:00`), endAt: fromLocalInput(endLocal) })
               }}
             >
               {events.map((ev) => {
                 const s = new Date(ev.startAt!)
-                const e = ev.endAt ? new Date(ev.endAt) : null
                 const startMin = s.getHours() * 60 + s.getMinutes()
-                const sameDay = e && toDateKey(e) === day
-                const endMin = sameDay ? e!.getHours() * 60 + e!.getMinutes() : sameDay === null ? startMin + 60 : 24 * 60
+                let endMin = startMin + 60
+                if (ev.endAt) {
+                  const e = new Date(ev.endAt)
+                  endMin = toDateKey(e) === day ? e.getHours() * 60 + e.getMinutes() : 24 * 60
+                }
                 const height = Math.max(20, ((endMin - startMin) / 60) * HOUR_PX)
                 return (
                   <div
@@ -1197,7 +1316,7 @@ function Week(p: { items: Item[]; today: string; anchor: string; onOpen: (i: Ite
   )
 }
 
-function Month(p: { items: Item[]; today: string; anchor: string; onDay: (d: string) => void }) {
+function Month(p: Handlers & { anchor: string; onDay: (d: string) => void }) {
   const month = p.anchor.slice(0, 7)
   return (
     <div className="month">
@@ -1206,7 +1325,7 @@ function Month(p: { items: Item[]; today: string; anchor: string; onDay: (d: str
         const cls = `cell${day === p.today ? ' today' : ''}${day.startsWith(month) ? '' : ' other'}`
         return (
           <div key={day} className={cls} onClick={() => p.onDay(day)}>
-            {day.slice(8)}
+            {Number(day.slice(8))}
             {events.slice(0, 2).map((e) => <div key={e.id} className={`marker${e.done ? ' done' : ''}`}>{e.important ? '★' : '▪'} {e.title}</div>)}
             {todos.slice(0, 2).map((t) => <div key={t.id} className={`marker${t.done ? ' done' : ''}`}>{t.important ? '★' : '•'} {t.title}</div>)}
             {events.length + todos.length > 4 && <div className="marker">+{events.length + todos.length - 4}</div>}
@@ -1217,7 +1336,7 @@ function Month(p: { items: Item[]; today: string; anchor: string; onDay: (d: str
   )
 }
 
-function DayList(p: { items: Item[]; day: string; onOpen: (i: Item) => void; onNew: (d: Partial<Draft>) => void; onToggle: (i: Item) => void; onClose: () => void }) {
+function DayList(p: Handlers & { day: string; onClose: () => void }) {
   const { events, todos } = itemsOnDay(p.items, p.day)
   return (
     <div className="modal-backdrop" onClick={p.onClose}>
@@ -1227,13 +1346,13 @@ function DayList(p: { items: Item[]; day: string; onOpen: (i: Item) => void; onN
           {[...events, ...todos].map((i) => (
             <li key={i.id} className={i.done ? 'done' : ''} onClick={() => { p.onClose(); p.onOpen(i) }}>
               <input type="checkbox" checked={i.done} onClick={(e) => e.stopPropagation()} onChange={() => p.onToggle(i)} />
-              {i.title}{i.important && ' ★'}
+              {i.title}{i.important && <span className="star"> ★</span>}
             </li>
           ))}
         </ul>
         {events.length + todos.length === 0 && <p className="muted">항목이 없습니다.</p>}
         <div className="row">
-          <button onClick={() => { p.onClose(); p.onNew({ dueDate: p.day }) }}>이 날짜에 추가</button>
+          <button className="primary" onClick={() => { p.onClose(); p.onNew({ dueDate: p.day }) }}>이 날짜에 추가</button>
           <button onClick={p.onClose}>닫기</button>
         </div>
       </div>
@@ -1277,27 +1396,29 @@ git commit -m "feat: calendar view with week and month modes"
 import type { Item } from '../domain/types'
 import { quadrant, type Quadrant } from '../domain/rules'
 
-const LABELS: Record<Quadrant, string> = {
-  1: '① 중요·긴급',
-  2: '② 중요·덜 긴급',
-  3: '③ 덜 중요·긴급',
-  4: '④ 나머지',
+const LABELS: Record<Quadrant, [string, string]> = {
+  1: ['① 바로 하기', '중요 · 긴급'],
+  2: ['② 계획하기', '중요 · 덜 긴급'],
+  3: ['③ 빨리 처리', '덜 중요 · 긴급'],
+  4: ['④ 나중에', '나머지'],
 }
 
 export function MatrixView(props: { items: Item[]; today: string; onOpen: (i: Item) => void }) {
   const open = props.items.filter((i) => !i.done)
   return (
-    <div className="matrix">
-      {([1, 2, 3, 4] as Quadrant[]).map((q) => (
-        <section key={q}>
-          <h3>{LABELS[q]}</h3>
-          <ul>
+    <div>
+      <div className="top">미완료 항목 전체</div>
+      <h2 className="page-title">매트릭스</h2>
+      <div className="matrix">
+        {([1, 2, 3, 4] as Quadrant[]).map((q) => (
+          <section key={q} className={`q q${q}`}>
+            <h3>{LABELS[q][0]}<small>{LABELS[q][1]}</small></h3>
             {open.filter((i) => quadrant(i, props.today) === q).map((i) => (
-              <li key={i.id} onClick={() => props.onOpen(i)}>{i.title}</li>
+              <div key={i.id} className="it" onClick={() => props.onOpen(i)}>{i.title}</div>
             ))}
-          </ul>
-        </section>
-      ))}
+          </section>
+        ))}
+      </div>
     </div>
   )
 }
