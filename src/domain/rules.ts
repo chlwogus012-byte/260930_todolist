@@ -56,3 +56,16 @@ export function validateItem(v: {
   }
   return null
 }
+
+function dayNumber(key: string): number {
+  const [y, m, d] = key.split('-').map(Number)
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000)
+}
+
+export function dueLabel(due: string, today: string): string {
+  const diff = dayNumber(due) - dayNumber(today)
+  if (diff < 0) return `${-diff}일 지남`
+  if (diff === 0) return '오늘'
+  if (diff === 1) return '내일'
+  return due.slice(5)
+}

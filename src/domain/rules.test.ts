@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest'
 import type { Item } from './types'
-import { effectiveDue, isOverdue, isUrgent, quadrant, todayList, validateItem } from './rules'
+import { dueLabel, effectiveDue, isOverdue, isUrgent, quadrant, todayList, validateItem } from './rules'
 
 const T = '2026-09-30'
 const mk = (o: Partial<Item> = {}): Item => ({
@@ -62,4 +62,14 @@ test('validateItem', () => {
   expect(validateItem({ title: 'a', startAt: s, endAt: '2026-09-30T09:00:00.000Z' })).toMatch(/종료/)
   expect(validateItem({ title: 'a', startAt: s, endAt: s })).toBeNull()
   expect(validateItem({ title: 'a', startAt: null, endAt: s })).toMatch(/시작/)
+})
+
+
+test('dueLabel', () => {
+  expect(dueLabel('2026-09-28', T)).toBe('2일 지남')
+  expect(dueLabel('2026-09-29', T)).toBe('1일 지남')
+  expect(dueLabel(T, T)).toBe('오늘')
+  expect(dueLabel('2026-10-01', T)).toBe('내일')
+  expect(dueLabel('2026-10-08', T)).toBe('10-08')
+  expect(dueLabel('2026-12-31', '2026-12-30')).toBe('내일')
 })

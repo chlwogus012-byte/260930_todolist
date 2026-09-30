@@ -1,0 +1,81 @@
+/* 디자인 B: 모던 카드 (docs/design/references/index.html 참고) */
+:root {
+  --bg: #f4f6fb; --surface: #fff; --text: #161a29; --muted: #7a8199; --line: #e4e8f2;
+  --accent: #4f46e5; --accent-soft: #eceafd; --danger: #e11d48; --danger-soft: #ffe8ee;
+  --star: #f59e0b; --radius: 14px; --block: #dcd9fb; --block-imp: #fde9c2;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, "Malgun Gothic", sans-serif; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.app { max-width: 900px; margin: 0 auto; padding: 18px 16px 96px; }
+
+.top { font-size: 12px; color: var(--muted); }
+.page-title { font-size: 26px; margin: 2px 0 14px; letter-spacing: -.02em; }
+.sec { font-size: 12px; font-weight: 600; color: var(--muted); margin: 16px 0 6px; letter-spacing: .04em; }
+.muted { color: var(--muted); font-size: 14px; }
+.star { color: var(--star); }
+
+.tl { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 12px; }
+.ev { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; cursor: pointer; }
+.ev:last-child { border: 0; }
+.ev .t { width: 44px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ev.done, .todo.done { opacity: .45; text-decoration: line-through; }
+
+.todo { display: flex; gap: 10px; align-items: center; padding: 11px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 6px; font-size: 14px; cursor: pointer; }
+.todo .meta { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.badge { font-size: 11px; padding: 2px 6px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.todo.overdue { background: var(--danger-soft); border-color: transparent; }
+.todo.overdue .meta { color: var(--danger); font-weight: 600; }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+
+nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-around; align-items: center; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 6px 12px; }
+nav button { background: none; border: 0; color: var(--muted); font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+nav button i { font-style: normal; font-size: 17px; }
+nav button.on { color: var(--accent); font-weight: 700; }
+nav .add { width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 26px; margin-top: -22px; box-shadow: 0 4px 12px rgba(0,0,0,.25); justify-content: center; }
+
+.error { background: var(--danger-soft); color: var(--danger); padding: 10px 12px; border-radius: var(--radius); margin-bottom: 10px; display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.error button { margin-left: auto; border: 1px solid var(--danger); background: none; color: var(--danger); border-radius: 8px; padding: 4px 10px; }
+
+.modal-backdrop { position: fixed; inset: 0; background: rgba(22,26,41,.45); display: flex; align-items: center; justify-content: center; z-index: 10; }
+.modal { background: var(--surface); padding: 18px; border-radius: 18px; display: grid; gap: 10px; width: min(420px, 92vw); max-height: 90vh; overflow: auto; }
+.modal label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.modal input[type="date"], .modal input[type="datetime-local"] { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.title-input { font-size: 18px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.row { display: flex; gap: 8px; }
+.row button, .login button { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.row .primary, .login button[type="submit"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.row .danger { margin-left: auto; color: var(--danger); }
+.row button:disabled { opacity: .6; }
+
+.login { display: grid; gap: 10px; max-width: 320px; margin: 18vh auto; padding: 0 16px; }
+.login input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+
+/* 매트릭스 */
+.matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; min-height: 180px; }
+.q h3 { font-size: 13px; margin: 0 0 8px; }
+.q h3 small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 1px; }
+.q.q1 h3 { color: var(--danger); } .q.q2 h3 { color: var(--accent); }
+.q .it { font-size: 13px; padding: 6px 8px; border-radius: 8px; background: var(--bg); margin-bottom: 5px; cursor: pointer; }
+
+/* 캘린더 */
+.cal-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.cal-head b { font-size: 18px; margin-right: auto; }
+.cal-head button { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 4px 12px; font-size: 13px; }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); }
+.month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cell { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; min-height: 72px; padding: 3px; font-size: 12px; cursor: pointer; }
+.week .cell { border-radius: 0; min-height: 48px; }
+.cell.today { background: var(--accent-soft); }
+.cell.other { color: #b5bacb; }
+.daycol { position: relative; height: 960px; border-left: 1px solid var(--line); background-image: linear-gradient(var(--line) 1px, transparent 1px); background-size: 100% 40px; }
+.block { position: absolute; left: 2px; right: 2px; background: var(--block); border-left: 3px solid var(--accent); border-radius: 4px; font-size: 11px; padding: 2px 3px; overflow: hidden; }
+.block.important { background: var(--block-imp); border-left-color: var(--star); }
+.block.done { opacity: .4; }
+.marker { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marker.done { opacity: .4; text-decoration: line-through; }
+.modal ul { list-style: none; padding: 0; margin: 0; }
+.modal li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.modal li.done { opacity: .45; text-decoration: line-through; }
