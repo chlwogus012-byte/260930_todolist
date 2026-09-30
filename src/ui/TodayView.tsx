@@ -1,5 +1,5 @@
 import type { Item } from '../domain/types'
-import { dueLabel, effectiveDue, isOverdue, quadrant, todayList } from '../domain/rules'
+import { dueLabel, effectiveDue, isOverdue, quadrant, todayTodos } from '../domain/rules'
 import { itemsOnDay } from '../domain/calendar'
 import { toLocalInput } from '../domain/dates'
 
@@ -18,7 +18,7 @@ export function TodayView(props: {
   onOpen: (item: Item) => void
 }) {
   const { events } = itemsOnDay(props.items, props.today)
-  const todos = todayList(props.items, props.today).filter((i) => !i.startAt || isOverdue(i, props.today))
+  const todos = todayTodos(props.items, props.today)
   return (
     <div>
       <div className="top">{heading(props.today)}</div>

@@ -1,10 +1,10 @@
-import { test, expect, beforeAll, describe } from 'vitest'
+import { test, expect, beforeAll, afterAll, describe } from 'vitest'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { loadEnv } from 'vite'
 
-const env = loadEnv('test', process.cwd(), 'VITE_')
-const url = env.VITE_SUPABASE_URL
-const key = env.VITE_SUPABASE_ANON_KEY
+const env = loadEnv('test', process.cwd(), 'TEST_')
+const url = env.TEST_SUPABASE_URL
+const key = env.TEST_SUPABASE_ANON_KEY
 const run = Date.now()
 
 async function signedIn(tag: string): Promise<SupabaseClient> {
@@ -18,7 +18,7 @@ async function signedIn(tag: string): Promise<SupabaseClient> {
   return c
 }
 
-// Skipped (not passed) when no Supabase project is configured in .env
+// Skipped (not passed) when no Supabase project is configured (TEST_SUPABASE_URL / TEST_SUPABASE_ANON_KEY in .env.test or .env)
 describe.skipIf(!url || !key)('items row level security', () => {
   let a: SupabaseClient
   let b: SupabaseClient
@@ -31,6 +31,10 @@ describe.skipIf(!url || !key)('items row level security', () => {
     if (error) throw error
     aItemId = data.id
   }, 30000)
+
+  afterAll(async () => {
+    if (a && aItemId) await a.from('items').delete().eq('id', aItemId)
+  })
 
   test('B cannot read A items', async () => {
     const { data, error } = await b.from('items').select().eq('id', aItemId)
@@ -53,8 +57,8 @@ describe.skipIf(!url || !key)('items row level security', () => {
 
   test('anonymous client sees nothing', async () => {
     const anon = createClient(url, key, { auth: { persistSession: false } })
-    const { data } = await anon.from('items').select()
-    expect(data ?? []).toEqual([])
+    const { data, error } = await anon.from('items').select()
+    expect(error !== null || (Array.isArray(data) && data.length === 0)).toBe(true)
   })
 
   test('DB rejects blank title and end before start', async () => {

@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest'
 import type { Item } from './types'
-import { dueLabel, effectiveDue, isOverdue, isUrgent, quadrant, todayList, validateItem } from './rules'
+import { dueLabel, effectiveDue, isOverdue, isUrgent, quadrant, todayList, todayTodos, validateItem } from './rules'
 
 const T = '2026-09-30'
 const mk = (o: Partial<Item> = {}): Item => ({
@@ -72,4 +72,19 @@ test('dueLabel', () => {
   expect(dueLabel('2026-10-01', T)).toBe('내일')
   expect(dueLabel('2026-10-08', T)).toBe('10-08')
   expect(dueLabel('2026-12-31', '2026-12-30')).toBe('내일')
+})
+
+test('todayTodos: due today with start tomorrow is a todo', () => {
+  const i = mk({ id: 'a', dueDate: T, startAt: new Date(2026, 9, 1, 9, 0).toISOString() })
+  expect(todayTodos([i], T).map((x) => x.id)).toEqual(['a'])
+})
+
+test('todayTodos: start today (not overdue) is only an event', () => {
+  const i = mk({ id: 'a', startAt: new Date(2026, 8, 30, 9, 0).toISOString() })
+  expect(todayTodos([i], T)).toEqual([])
+})
+
+test('todayTodos: start today with due yesterday is not duplicated as todo', () => {
+  const i = mk({ id: 'a', dueDate: '2026-09-29', startAt: new Date(2026, 8, 30, 9, 0).toISOString() })
+  expect(todayTodos([i], T)).toEqual([])
 })

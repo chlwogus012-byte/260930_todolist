@@ -35,23 +35,23 @@ export function CalendarView(props: Handlers) {
         <button onClick={() => shift(1)}>▶</button>
         <button onClick={() => setMode(mode === 'week' ? 'month' : 'week')}>{mode === 'week' ? '월간' : '주간'}</button>
       </div>
-      {mode === 'week' ? <Week {...props} anchor={anchor} /> : <Month {...props} anchor={anchor} onDay={setDayList} />}
+      {mode === 'week' ? <Week {...props} anchor={anchor} onDay={setDayList} /> : <Month {...props} anchor={anchor} onDay={setDayList} />}
       {dayList && <DayList {...props} day={dayList} onClose={() => setDayList(null)} />}
     </div>
   )
 }
 
-function Week(p: Handlers & { anchor: string }) {
+function Week(p: Handlers & { anchor: string; onDay: (d: string) => void }) {
   return (
     <div className="week">
       {weekDays(p.anchor).map((day) => {
         const { events, todos } = itemsOnDay(p.items, day)
         return (
           <div key={day}>
-            <div className={day === p.today ? 'cell today' : 'cell'}>
+            <div className={day === p.today ? 'cell today' : 'cell'} onClick={() => p.onDay(day)}>
               {Number(day.slice(8))}
               {todos.map((t) => (
-                <div key={t.id} className={`marker${t.done ? ' done' : ''}`} onClick={() => p.onOpen(t)}>{t.important ? '★' : '•'} {t.title}</div>
+                <div key={t.id} className={`marker${t.done ? ' done' : ''}`} onClick={(x) => { x.stopPropagation(); p.onOpen(t) }}>{t.important ? '★' : '•'} {t.title}</div>
               ))}
             </div>
             <div
@@ -97,13 +97,14 @@ function Month(p: Handlers & { anchor: string; onDay: (d: string) => void }) {
     <div className="month">
       {monthGrid(p.anchor).flat().map((day) => {
         const { events, todos } = itemsOnDay(p.items, day)
+        const hidden = events.length + todos.length - (Math.min(2, events.length) + Math.min(2, todos.length))
         const cls = `cell${day === p.today ? ' today' : ''}${day.startsWith(month) ? '' : ' other'}`
         return (
           <div key={day} className={cls} onClick={() => p.onDay(day)}>
             {Number(day.slice(8))}
             {events.slice(0, 2).map((e) => <div key={e.id} className={`marker${e.done ? ' done' : ''}`}>{e.important ? '★' : '▪'} {e.title}</div>)}
             {todos.slice(0, 2).map((t) => <div key={t.id} className={`marker${t.done ? ' done' : ''}`}>{t.important ? '★' : '•'} {t.title}</div>)}
-            {events.length + todos.length > 4 && <div className="marker">+{events.length + todos.length - 4}</div>}
+            {hidden > 0 && <div className="marker">+{hidden}</div>}
           </div>
         )
       })}

@@ -28,7 +28,7 @@ export function App() {
 }
 
 function Main() {
-  const { items, error, reload, save, toggleDone, remove, clearError } = useItems()
+  const { items, error, loading, reload, save, toggleDone, remove, clearError } = useItems()
   const [tab, setTab] = useState<Tab>('today')
   const [draft, setDraft] = useState<Draft | null>(null)
   const today = toDateKey(new Date())
@@ -40,9 +40,10 @@ function Main() {
     <div className="app">
       {error && <ErrorBanner message={error} onRetry={() => { clearError(); void reload() }} />}
       <main>
-        {tab === 'today' && <TodayView items={items} today={today} onToggle={toggleDone} onOpen={openEdit} />}
-        {tab === 'calendar' && <CalendarView items={items} today={today} onOpen={openEdit} onNew={openNew} onToggle={toggleDone} />}
-        {tab === 'matrix' && <MatrixView items={items} today={today} onOpen={openEdit} />}
+        {loading && <p className="muted">불러오는 중…</p>}
+        {!loading && tab === 'today' && <TodayView items={items} today={today} onToggle={toggleDone} onOpen={openEdit} />}
+        {!loading && tab === 'calendar' && <CalendarView items={items} today={today} onOpen={openEdit} onNew={openNew} onToggle={toggleDone} />}
+        {!loading && tab === 'matrix' && <MatrixView items={items} today={today} onOpen={openEdit} />}
       </main>
       <nav>
         <button className={tab === 'today' ? 'on' : ''} onClick={() => setTab('today')}><i>◎</i>오늘</button>

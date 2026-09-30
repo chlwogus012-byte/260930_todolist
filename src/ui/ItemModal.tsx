@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { ItemInput } from '../domain/types'
+import { validateItem } from '../domain/rules'
+import { ErrorBanner } from './ErrorBanner'
 import { fromLocalInput, toLocalInput } from '../domain/dates'
 
 export type Draft = {
@@ -24,19 +26,25 @@ export function ItemModal(props: {
   const [start, setStart] = useState(toLocalInput(draft.startAt))
   const [end, setEnd] = useState(toLocalInput(draft.endAt))
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function submit() {
     if (saving) return
-    setSaving(true)
-    const ok = await props.onSave({
+    const input = {
       title,
       important,
       dueDate: due || null,
       startAt: fromLocalInput(start),
       endAt: fromLocalInput(end),
-    })
+    }
+    const invalid = validateItem(input)
+    if (invalid) { setError(invalid); return }
+    setError(null)
+    setSaving(true)
+    const ok = await props.onSave(input)
     setSaving(false)
     if (ok) props.onClose()
+    else setError('저장하지 못했습니다. 다시 시도하세요.')
   }
 
   return (
@@ -47,6 +55,7 @@ export function ItemModal(props: {
         <label>마감일 <input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
         <label>시작 <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></label>
         <label>종료 <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+        {error && <ErrorBanner message={error} />}
         <div className="row">
           <button className="primary" type="submit" disabled={saving}>저장</button>
           <button type="button" onClick={props.onClose}>취소</button>

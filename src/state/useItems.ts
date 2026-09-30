@@ -22,15 +22,12 @@ export function useItems() {
   useEffect(() => { void reload() }, [reload])
 
   async function save(id: string | null, input: ItemInput): Promise<boolean> {
-    const invalid = validateItem(input)
-    if (invalid) { setError(invalid); return false }
+    if (validateItem(input)) return false
     try {
       const saved = id ? await updateItem(id, input) : await createItem(input)
       setItems((prev) => id ? prev.map((i) => (i.id === id ? saved : i)) : [...prev, saved])
-      setError(null)
       return true
     } catch {
-      setError('저장하지 못했습니다. 다시 시도하세요.')
       return false
     }
   }

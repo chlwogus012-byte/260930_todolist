@@ -1,5 +1,6 @@
 import type { Item } from './types'
 import { addDays, toDateKey } from './dates'
+import { itemsOnDay } from './calendar'
 
 export type Quadrant = 1 | 2 | 3 | 4
 
@@ -42,6 +43,11 @@ export function todayList(items: Item[], today: string): Item[] {
       if (d !== 0) return d
       return (a.startAt ?? '').localeCompare(b.startAt ?? '') || a.title.localeCompare(b.title)
     })
+}
+
+export function todayTodos(items: Item[], today: string): Item[] {
+  const shown = new Set(itemsOnDay(items, today).events.map((e) => e.id))
+  return todayList(items, today).filter((i) => !shown.has(i.id))
 }
 
 export function validateItem(v: {
