@@ -9,7 +9,7 @@ const run = Date.now()
 
 async function signedIn(tag: string): Promise<SupabaseClient> {
   const c = createClient(url, key, { auth: { persistSession: false } })
-  const email = `rls-${tag}-${run}@example.com`
+  const email = `rls-${tag}-${run}@mailinator.com`
   const password = 'Test-pass-12345'
   const { error } = await c.auth.signUp({ email, password })
   if (error) throw error
