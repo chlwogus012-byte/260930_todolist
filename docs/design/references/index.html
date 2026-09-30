@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>디자인 레퍼런스 — 할일 정리</title>
+<style>
+* { box-sizing: border-box; margin: 0; }
+body { font-family: system-ui, "Malgun Gothic", sans-serif; background: #e9e9ec; color: #222; padding: 24px; }
+h1 { font-size: 20px; margin-bottom: 4px; }
+.lead { color: #666; font-size: 14px; margin-bottom: 28px; }
+.dir { margin-bottom: 56px; }
+.dir > h2 { font-size: 17px; margin-bottom: 2px; }
+.dir > p { color: #666; font-size: 13px; margin-bottom: 14px; }
+.row { display: flex; gap: 24px; flex-wrap: wrap; }
+.cap { font-size: 12px; color: #777; margin: 6px 0 0 4px; }
+
+/* ===== 테마 변수 ===== */
+[data-theme="A"] {
+  --bg:#fbfaf7; --surface:#fff; --text:#2b2a27; --muted:#8a877f; --line:#ebe8e1;
+  --accent:#2f6f4f; --accent-soft:#e3f0e8; --danger:#c2410c; --danger-soft:#fdeee6;
+  --star:#b7791f; --radius:6px; --font:Georgia,"Noto Serif KR","Batang",serif; --ui:system-ui,"Malgun Gothic",sans-serif;
+  --nav-bg:#fbfaf7; --block:#e3f0e8; --block-imp:#f6e7c8;
+}
+[data-theme="B"] {
+  --bg:#f4f6fb; --surface:#fff; --text:#161a29; --muted:#7a8199; --line:#e4e8f2;
+  --accent:#4f46e5; --accent-soft:#eceafd; --danger:#e11d48; --danger-soft:#ffe8ee;
+  --star:#f59e0b; --radius:14px; --font:system-ui,"Malgun Gothic",sans-serif; --ui:system-ui,"Malgun Gothic",sans-serif;
+  --nav-bg:#fff; --block:#dcd9fb; --block-imp:#fde9c2;
+}
+[data-theme="C"] {
+  --bg:#111214; --surface:#1b1d21; --text:#ececef; --muted:#8b8f98; --line:#2a2d33;
+  --accent:#ffb84d; --accent-soft:#2c2617; --danger:#ff6b6b; --danger-soft:#33191b;
+  --star:#ffb84d; --radius:10px; --font:system-ui,"Malgun Gothic",sans-serif; --ui:system-ui,"Malgun Gothic",sans-serif;
+  --nav-bg:#16171a; --block:#2b3a4d; --block-imp:#4a3a1c;
+}
+
+/* ===== 폰 프레임 ===== */
+.phone { width: 360px; height: 720px; background: var(--bg); color: var(--text); border-radius: 28px; border: 8px solid #1d1d1f; overflow: hidden; display: flex; flex-direction: column; font-family: var(--ui); position: relative; }
+.screen { flex: 1; overflow: hidden; padding: 18px 16px 8px; }
+.top { font-size: 12px; color: var(--muted); }
+h3.title { font-family: var(--font); font-size: 26px; margin: 2px 0 14px; letter-spacing: -.02em; }
+.sec { font-size: 12px; font-weight: 600; color: var(--muted); margin: 16px 0 6px; letter-spacing: .04em; }
+
+.tl { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 12px; }
+.ev { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: baseline; font-size: 14px; }
+.ev:last-child { border: 0; }
+.ev .t { width: 44px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ev.imp .name::after { content: " ★"; color: var(--star); }
+.ev .dur { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+.todo { display: flex; gap: 10px; align-items: center; padding: 11px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 6px; font-size: 14px; }
+.chk { width: 18px; height: 18px; border: 1.5px solid var(--muted); flex: none; }
+[data-theme="A"] .chk { border-radius: 3px; }
+[data-theme="B"] .chk { border-radius: 50%; }
+[data-theme="C"] .chk { border-radius: 5px; }
+.todo .meta { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.todo .star { color: var(--star); }
+.todo.overdue { background: var(--danger-soft); border-color: transparent; }
+.todo.overdue .chk { border-color: var(--danger); }
+.todo.overdue .meta { color: var(--danger); font-weight: 600; }
+.badge { font-size: 10px; padding: 2px 6px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-right: 2px; }
+.todo.overdue .badge { background: transparent; color: var(--danger); padding-left: 0; }
+
+nav.bar { display: flex; justify-content: space-around; align-items: center; background: var(--nav-bg); border-top: 1px solid var(--line); padding: 8px 6px 12px; font-size: 11px; color: var(--muted); }
+nav.bar .on { color: var(--accent); font-weight: 700; }
+nav.bar span { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+nav.bar i { font-style: normal; font-size: 17px; }
+.plus { width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: var(--nav-bg); font-size: 26px; display: grid; place-items: center; margin-top: -22px; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+[data-theme="A"] .plus { border-radius: 10px; color: #fff; }
+[data-theme="B"] .plus { color: #fff; }
+
+/* ===== 캘린더 ===== */
+.seg { display: inline-flex; background: var(--line); border-radius: 99px; padding: 2px; font-size: 12px; }
+.seg span { padding: 4px 12px; border-radius: 99px; color: var(--muted); }
+.seg .on { background: var(--surface); color: var(--text); font-weight: 600; }
+.calhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.calhead b { font-family: var(--font); font-size: 18px; }
+.days { display: grid; grid-template-columns: 26px repeat(7, 1fr); font-size: 11px; text-align: center; color: var(--muted); }
+.days .d b { display: block; font-size: 14px; color: var(--text); margin-top: 2px; }
+.days .today b { background: var(--accent); color: var(--nav-bg); border-radius: 50%; width: 24px; height: 24px; line-height: 24px; margin: 2px auto 0; }
+[data-theme="A"] .days .today b, [data-theme="B"] .days .today b { color: #fff; }
+.dots { display: grid; grid-template-columns: 26px repeat(7, 1fr); min-height: 22px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.dots div { font-size: 9px; color: var(--muted); text-align: center; }
+.dots .m { color: var(--accent); font-weight: 700; }
+.grid { position: relative; display: grid; grid-template-columns: 26px repeat(7, 1fr); height: 400px; }
+.grid .hrs { font-size: 9px; color: var(--muted); position: relative; }
+.grid .hrs span { position: absolute; right: 4px; transform: translateY(-50%); }
+.col { position: relative; border-left: 1px solid var(--line); background-image: linear-gradient(var(--line) 1px, transparent 1px); background-size: 100% 40px; }
+.col.today { background-color: var(--accent-soft); }
+.blk { position: absolute; left: 2px; right: 2px; border-radius: 4px; background: var(--block); font-size: 9px; padding: 2px 3px; overflow: hidden; border-left: 3px solid var(--accent); line-height: 1.2; }
+.blk.imp { background: var(--block-imp); border-color: var(--star); }
+.blk.done { opacity: .4; }
+
+/* ===== 매트릭스 ===== */
+.mx { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; min-height: 210px; }
+.q h4 { font-size: 12px; margin-bottom: 8px; }
+.q h4 small { display: block; font-weight: 400; color: var(--muted); font-size: 10px; margin-top: 1px; }
+.q .it { font-size: 12px; padding: 6px 8px; border-radius: 6px; background: var(--bg); margin-bottom: 5px; }
+.q1 h4 { color: var(--danger); } .q2 h4 { color: var(--accent); }
+.axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin: 4px 2px 0; }
+</style>
+</head>
+<body>
+<h1>디자인 레퍼런스 3가지</h1>
+<p class="lead">각 방향마다 오늘 / 캘린더(주간) / 매트릭스 화면입니다. 마음에 드는 방향(A·B·C)과, 바꾸고 싶은 점을 알려 주세요. 섞어도 됩니다. 예: "B 색에 A 글꼴".</p>
+<div id="root"></div>
+
+<script>
+const dirs = [
+  { id: 'A', name: 'A. 종이 노트 — 차분한 미니멀', desc: '따뜻한 흰 종이색, 세리프 제목, 각진 모서리, 초록 포인트. 노션처럼 조용하고 글이 중심.' },
+  { id: 'B', name: 'B. 모던 카드 — 밝고 또렷한 앱', desc: '푸른 회색 배경에 둥근 카드, 인디고 포인트. 폰 앱다운 느낌이고 우선순위가 색으로 잘 보임.' },
+  { id: 'C', name: 'C. 다크 포커스 — 집중용', desc: '어두운 배경에 앰버 포인트. 눈이 편하고 "지금 할 일"이 도드라짐. 밤에 쓰기 좋음.' },
+];
+
+const nav = (on) => `<nav class="bar">
+  <span class="${on==0?'on':''}"><i>◎</i>오늘</span>
+  <span class="${on==1?'on':''}"><i>▦</i>캘린더</span>
+  <div class="plus">+</div>
+  <span class="${on==2?'on':''}"><i>▤</i>매트릭스</span>
+</nav>`;
+
+const today = () => `<div class="phone"><div class="screen">
+  <div class="top">9월 30일 수요일</div>
+  <h3 class="title">오늘</h3>
+  <div class="sec">일정</div>
+  <div class="tl">
+    <div class="ev"><span class="t">09:30</span><span class="name">팀 스탠드업</span><span class="dur">30분</span></div>
+    <div class="ev imp"><span class="t">14:00</span><span class="name">디자인 리뷰</span><span class="dur">1시간 30분</span></div>
+    <div class="ev"><span class="t">19:00</span><span class="name">운동</span><span class="dur">1시간</span></div>
+  </div>
+  <div class="sec">할 일 · 4</div>
+  <div class="todo overdue"><div class="chk"></div><span>세금 서류 제출 <span class="star">★</span></span><span class="meta">2일 지남</span></div>
+  <div class="todo"><div class="chk"></div><span>발표 자료 마무리 <span class="star">★</span></span><span class="meta"><span class="badge">① 오늘</span></span></div>
+  <div class="todo"><div class="chk"></div><span>병원 예약 전화</span><span class="meta"><span class="badge">③ 오늘</span></span></div>
+  <div class="todo"><div class="chk"></div><span>택배 반품 접수</span><span class="meta"><span class="badge">③ 내일</span></span></div>
+</div>${nav(0)}</div>`;
+
+const week = () => {
+  const names = ['일','월','화','수','목','금','토'], nums = [27,28,29,30,1,2,3];
+  const head = names.map((n,i)=>`<div class="d ${i==3?'today':''}">${n}<b>${nums[i]}</b></div>`).join('');
+  const dots = ['', '', '', '•', '•', '', '', ''].map((m,i)=>i==0?'<div></div>':`<div class="m">${m}</div>`).join('');
+  // hours 8..18 => 40px per hour
+  const hrs = [8,10,12,14,16,18].map(h=>`<span style="top:${(h-8)*40}px">${h}</span>`).join('');
+  const blk = (col, sh, eh, txt, cls='') => ({col, top:(sh-8)*40, h:(eh-sh)*40, txt, cls});
+  const bl = [
+    blk(1, 9, 10.5, '주간회의'), blk(2, 13, 14, '점심 약속'), blk(3, 9.5, 10, '스탠드업'),
+    blk(3, 14, 15.5, '디자인 리뷰', 'imp'), blk(3, 16.5, 17.5, '운동', ''),
+    blk(4, 11, 12, '치과', 'done'), blk(5, 15, 17, '워크숍', 'imp'), blk(6, 10, 12, '등산'),
+  ];
+  const cols = Array.from({length:7},(_,i)=>`<div class="col ${i==3?'today':''}">${bl.filter(b=>b.col==i).map(b=>`<div class="blk ${b.cls}" style="top:${b.top}px;height:${b.h}px">${b.txt}</div>`).join('')}</div>`).join('');
+  return `<div class="phone"><div class="screen">
+    <div class="calhead"><b>2026년 9월</b><div class="seg"><span class="on">주간</span><span>월간</span></div></div>
+    <div class="days"><div></div>${head}</div>
+    <div class="dots"><div></div><div></div><div></div><div></div><div class="m">• 2</div><div class="m">• 1</div><div></div><div></div></div>
+    <div class="grid"><div class="hrs">${hrs}</div>${cols}</div>
+  </div>${nav(1)}</div>`;
+};
+
+const matrix = () => `<div class="phone"><div class="screen">
+  <div class="top">미완료 항목 전체</div>
+  <h3 class="title">매트릭스</h3>
+  <div class="axis"><span>긴급 ▸ 마감 내일까지</span><span>덜 긴급</span></div>
+  <div class="mx">
+    <div class="q q1"><h4>① 바로 하기<small>중요 · 긴급</small></h4><div class="it">세금 서류 제출</div><div class="it">발표 자료 마무리</div></div>
+    <div class="q q2"><h4>② 계획하기<small>중요 · 덜 긴급</small></h4><div class="it">이력서 업데이트</div><div class="it">영어 공부 계획</div></div>
+    <div class="q"><h4>③ 빨리 처리<small>덜 중요 · 긴급</small></h4><div class="it">병원 예약 전화</div><div class="it">택배 반품 접수</div></div>
+    <div class="q"><h4>④ 나중에<small>나머지</small></h4><div class="it">책상 정리</div><div class="it">구독 서비스 점검</div></div>
+  </div>
+</div>${nav(2)}</div>`;
+
+document.getElementById('root').innerHTML = dirs.map(d => `
+  <section class="dir" data-theme="${d.id}" style="background:none">
+    <h2>${d.name}</h2><p>${d.desc}</p>
+    <div class="row">
+      <div>${today()}<div class="cap">오늘</div></div>
+      <div>${week()}<div class="cap">캘린더 (주간)</div></div>
+      <div>${matrix()}<div class="cap">매트릭스</div></div>
+    </div>
+  </section>`).join('');
+</script>
+</body>
+</html>
